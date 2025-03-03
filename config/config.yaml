@@ -1,0 +1,11 @@
+keywords:
+  top_k: 10
+output:
+  dir: output
+preprocessing:
+  stopwords_path: data/stopwords.txt
+sentiment:
+  model_path: models/sentiment_model.pt
+topic:
+  max_topics: 10
+  min_topics: 2
