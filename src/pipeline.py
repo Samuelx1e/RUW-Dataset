@@ -4,6 +4,7 @@ from typing import Dict, List, Tuple
 import yaml
 import logging
 from pathlib import Path
+from tqdm import tqdm
 
 from preprocessing.text_cleaner import TextCleaner
 from sentiment.bert_classifier import SentimentAnalyzer
@@ -64,9 +65,15 @@ class Pipeline:
     def analyze_sentiment(self) -> Tuple[List[int], List[float]]:
         """情感分析"""
         logger.info("开始情感分析...")
-        predictions, probabilities = self.sentiment_analyzer.predict(
-            self.processed_data['cleaned_text'].tolist()
-        )
+        texts = self.processed_data['cleaned_text'].tolist()
+        predictions = []
+        probabilities = []
+        
+        for text in tqdm(texts, desc="情感分析进度"):
+            pred, prob = self.sentiment_analyzer.predict([text])
+            predictions.extend(pred)
+            probabilities.extend(prob)
+            
         self.sentiment_results = (predictions, probabilities)
         return predictions, probabilities
     
