@@ -29,63 +29,68 @@ class EvolutionAnalyzer:
         
         return min(base_influence * auth_weight, 1.0)  # 确保不超过1
     
-    def calculate_text_influence(self, reposts: int, comments: int, 
-                               attitudes: int) -> float:
-        """计算文本传播影响力"""
-        # 计算各项传播指标的对数值
-        repost_score = np.log1p(reposts)
+    def calculate_text_influence(self, comments, likes, shares):
+        """计算文本的影响力分数
+        
+        Args:
+            comments (int/float): 评论数
+            likes (int/float): 点赞数
+            shares (int/float): 分享数
+        
+        Returns:
+            float: 影响力分数
+        """
+        # 确保输入为数值类型
+        try:
+            comments = float(comments) if comments else 0
+            likes = float(likes) if likes else 0
+            shares = float(shares) if shares else 0
+        except (ValueError, TypeError):
+            return 0.0
+        
         comment_score = np.log1p(comments)
-        attitude_score = np.log1p(attitudes)
+        like_score = np.log1p(likes)
+        share_score = np.log1p(shares)
         
-        # 加权平均，转发权重最高
-        weighted_score = (0.5 * repost_score + 0.3 * comment_score + 0.2 * attitude_score)
-        
-        # 归一化到0-1范围
-        max_possible_score = np.log1p(10000)  # 假设单条微博最大互动量为10000
-        normalized_score = min(weighted_score / max_possible_score, 1.0)
-        
-        return normalized_score
+        return comment_score + like_score + share_score
     
     def calculate_post_influence(self, row: pd.Series) -> float:
-        """计算单条微博的综合影响力"""
-        text_influence = self.calculate_text_influence(
-            row['reposts_count'],
-            row['comments_count'],
-            row['attitudes_count']
-        )
+        """
+        计算单个帖子的影响力
         
-        user_influence = self.calculate_user_influence(
-            row['followers_count'],
-            row['verified'],
-            row['verified_type']
-        )
-        
-        # 按0.6:0.4的比例计算综合影响力
-        return 0.6 * text_influence + 0.4 * user_influence
+        如果缺少互动数据（likes_count等），则返回默认值1.0
+        """
+        try:
+            # 尝试获取互动数据
+            likes = row.get('likes_count', 0)
+            retweets = row.get('retweets_count', 0)
+            replies = row.get('replies_count', 0)
+            
+            # 计算影响力分数
+            influence = 1.0 + 0.5 * likes + 1.0 * retweets + 0.8 * replies
+            return influence
+        except:
+            # 如果缺少数据或计算出错，返回默认值
+            return 1.0
     
     def calculate_daily_participation(self, df: pd.DataFrame) -> pd.DataFrame:
-        """计算每日参与度"""
-        # 确保时间列为datetime类型
-        df['created_at'] = pd.to_datetime(df['created_at'])
+        """
+        计算每日参与度统计
+        """
+        # 确保数据框有必要的列
+        if 'created_at' not in df.columns:
+            raise ValueError("数据中缺少 'created_at' 列")
         
-        # 计算每条微博的影响力
+        # 添加默认的影响力值
         df['influence'] = df.apply(self.calculate_post_influence, axis=1)
         
-        # 按日期分组计算
+        # 按日期分组计算统计数据
         daily_stats = df.groupby(df['created_at'].dt.date).agg({
-            'influence': 'sum',
-            'msg_id': 'count'  # 计算每日微博数量
+            'text': 'count',  # 帖子数量
+            'influence': 'sum'  # 总影响力
         }).reset_index()
         
-        # 计算总影响力
-        total_influence = daily_stats['influence'].sum()
-        
-        # 计算日参与度
-        daily_stats['participation'] = daily_stats['influence'] / total_influence
-        
-        # 计算演化指数 = 参与度 * 数据量
-        daily_stats['evolution_index'] = daily_stats['participation'] * daily_stats['msg_id']
-        
+        daily_stats.columns = ['date', 'post_count', 'total_influence']
         return daily_stats
     
     def calculate_confrontation_index(self, df: pd.DataFrame, 
@@ -110,12 +115,22 @@ class EvolutionAnalyzer:
             values=['influence', 'msg_id']
         ).fillna(0)
         
+        # 确保存在情感极性为0和1的列
+        for col in [0, 1]:
+            if ('influence', col) not in pivot_table.columns:
+                pivot_table[('influence', col)] = 0
+            if ('msg_id', col) not in pivot_table.columns:
+                pivot_table[('msg_id', col)] = 0
+        
         # 计算正负情感的归一化权重
         total_influence = pivot_table['influence'].sum().sum()
-        confrontation_index = abs(
-            pivot_table['influence'][1].values / total_influence - 
-            pivot_table['influence'][0].values / total_influence
-        )
+        if total_influence == 0:
+            confrontation_index = np.zeros(len(pivot_table))
+        else:
+            confrontation_index = abs(
+                pivot_table['influence'][1].values / total_influence - 
+                pivot_table['influence'][0].values / total_influence
+            )
         
         result_df = pd.DataFrame({
             'date': pivot_table.index,

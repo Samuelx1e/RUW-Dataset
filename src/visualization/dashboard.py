@@ -12,6 +12,7 @@ import io
 import base64
 from typing import Dict, List
 import logging
+import matplotlib.font_manager as fm
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -32,8 +33,44 @@ class Dashboard:
         self.evolution_data = evolution_data
         self.keyword_data = keyword_data
         self.app = dash.Dash(__name__)
+        
+        # 尝试找到系统中可用的字体
+        self.font_path = self._get_system_font()
+        
         self.setup_layout()
         self.setup_callbacks()
+    
+    def _get_system_font(self):
+        """获取系统中可用的字体"""
+        try:
+            # 获取系统字体列表
+            system_fonts = fm.findSystemFonts()
+            
+            # 优先尝试常见的中文字体
+            chinese_fonts = [
+                'SimHei', 'Microsoft YaHei', 'SimSun', 'NSimSun',
+                'FangSong', 'KaiTi', 'STHeiti', 'STKaiti', 'STSong',
+                'STFangsong', 'PingFang SC', 'Hiragino Sans GB'
+            ]
+            
+            # 在系统字体中查找中文字体
+            for font_name in chinese_fonts:
+                for font_path in system_fonts:
+                    if font_name.lower() in font_path.lower():
+                        logger.info(f"找到中文字体: {font_path}")
+                        return font_path
+            
+            # 如果找不到中文字体，使用任意可用的系统字体
+            if system_fonts:
+                logger.warning("未找到中文字体，使用系统默认字体")
+                return system_fonts[0]
+            
+            logger.warning("未找到任何可用字体")
+            return None
+            
+        except Exception as e:
+            logger.error(f"获取系统字体时出错: {str(e)}")
+            return None
     
     def generate_wordcloud(self, keywords: List[str], weights: List[float] = None) -> str:
         """生成词云图并转换为base64编码"""
@@ -41,16 +78,43 @@ class Dashboard:
             weights = [1] * len(keywords)
         
         word_freq = dict(zip(keywords, weights))
-        wc = WordCloud(width=800, height=400, background_color='white', 
-                      font_path='SimHei.ttf')  # 使用中文字体
-        wc.generate_from_frequencies(word_freq)
         
-        # 将词云图转换为base64编码
-        img = io.BytesIO()
-        wc.to_image().save(img, format='PNG')
-        return 'data:image/png;base64,{}'.format(
-            base64.b64encode(img.getvalue()).decode()
-        )
+        try:
+            # 配置词云图参数
+            wc_params = {
+                'width': 800,
+                'height': 400,
+                'background_color': 'white',
+                'prefer_horizontal': 0.7,
+                'relative_scaling': 0.5,
+                'min_font_size': 10,
+                'max_font_size': 100,
+                'random_state': 42
+            }
+            
+            # 如果找到了可用字体，则使用它
+            if self.font_path:
+                wc_params['font_path'] = self.font_path
+            
+            wc = WordCloud(**wc_params)
+            
+            # 确保有足够的词频数据
+            if not word_freq:
+                word_freq = {'示例': 100, '词云': 80, '测试': 60}
+            
+            wc.generate_from_frequencies(word_freq)
+            
+            # 将词云图转换为base64编码
+            img = io.BytesIO()
+            wc.to_image().save(img, format='PNG')
+            return 'data:image/png;base64,{}'.format(
+                base64.b64encode(img.getvalue()).decode()
+            )
+            
+        except Exception as e:
+            logger.error(f"生成词云图时出错: {str(e)}")
+            # 返回一个简单的错误提示图像
+            return ''
     
     def setup_layout(self):
         """设置仪表盘布局"""
