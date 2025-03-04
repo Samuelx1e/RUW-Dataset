@@ -399,7 +399,7 @@ def main():
         # 创建配置文件
         config = {
             'preprocessing': {
-                'stopwords_path': 'data/stopwords.txt'
+                'stopwords_path': '../data/stopwords.txt'
             },
             'sentiment': {
                 'model_path': 'models/sentiment_model.pt'
