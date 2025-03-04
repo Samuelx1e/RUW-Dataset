@@ -55,7 +55,8 @@ class Pipeline:
         """加载数据"""
         logger.info(f"正在加载数据: {data_path}")
         # 只读取前200行数据用于测试
-        return pd.read_csv(data_path).head(50)
+        # return pd.read_csv(data_path).head(50)
+        return pd.read_csv(data_path)
     
     def preprocess(self, df: pd.DataFrame) -> pd.DataFrame:
         """数据预处理"""
@@ -220,7 +221,7 @@ class Pipeline:
         self.save_results()
         
         # 启动可视化
-        self.visualize()
+        # self.visualize()
     
     def save_results(self):
         """保存分析结果"""
